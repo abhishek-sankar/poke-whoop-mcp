@@ -26,7 +26,7 @@ export const config = {
         'read:cycles',
         'read:profile',
       ],
-    tokenStorePath: process.env.TOKEN_STORE_PATH ?? './data/whoop-tokens.json',
+    tokenStorePath: process.env.TOKEN_STORE_PATH ?? (process.env.VERCEL ? '/tmp/whoop-tokens.json' : './data/whoop-tokens.json'),
   },
 };
 

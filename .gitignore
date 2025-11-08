@@ -10,6 +10,9 @@ package-lock.json
 .env.test.local
 .env.production.local
 
+# But allow env.example to be committed
+!env.example
+
 # Build output
 dist/
 build/
@@ -64,3 +67,4 @@ coverage/
 
 # Optional eslint cache
 .eslintcache
+.vercel
