@@ -10,6 +10,7 @@ import { TokenStore } from '../src/auth/token-store.js';
 import { WhoopOAuthClient } from '../src/auth/whoop-oauth.js';
 import { WhoopApiClient } from '../src/whoop/client.js';
 import { parseHttpError } from '../src/utils/http-error.js';
+import { getTodayMetrics } from '../src/whoop/metrics.js';
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -168,6 +169,17 @@ app.get('/oauth/whoop/login', (req, res) => {
   } catch (error) {
     const { message } = parseHttpError(error);
     res.status(500).send(`Failed to initiate WHOOP OAuth flow: ${message}`);
+  }
+});
+
+app.get('/metrics/today', async (req, res) => {
+  try {
+    const key = typeof req.query.key === 'string' ? req.query.key : 'default';
+    const metrics = await getTodayMetrics(whoopClient, key);
+    res.json(metrics);
+  } catch (error) {
+    const { message } = parseHttpError(error);
+    res.status(500).json({ error: message });
   }
 });
 

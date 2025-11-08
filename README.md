@@ -70,6 +70,10 @@ In Poke’s “New Integration” form:
 
 Both tools return structured content matching the WHOOP pagination payload, plus a plain-text summary for quick inspection.
 
+## REST endpoints
+
+- `GET /metrics/today` — returns an at-a-glance JSON snapshot of today’s WHOOP metrics for the stored token (optionally supply `?key=` for multi-user setups). The payload includes overall sleep duration, stage breakdown, sleep score, strain, and calorie burn (kilojoules converted to kcal). WHOOP’s public API does not expose a daily steps total, so that field is returned as `null` for now.
+
 ## Notes
 
 - The server stores one token set per `key` (default is `default`). Add `?key=user123` to `/oauth/whoop/login` to authorize additional accounts.
