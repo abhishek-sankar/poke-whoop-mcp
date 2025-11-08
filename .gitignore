@@ -18,6 +18,10 @@ dist/
 build/
 *.tsbuildinfo
 
+# Compiled files in api directory (keep only .ts source)
+api/**/*.js
+api/**/*.js.map
+
 # Data and credentials
 data/
 whoop-tokens.json
