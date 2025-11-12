@@ -32,7 +32,29 @@ HOST=0.0.0.0
 # MCP_API_KEY=generate-a-strong-key
 # Optional: override default scopes (comma-separated)
 # WHOOP_SCOPES=read:sleep,read:cycles,read:profile
+# Optional: move token storage to Supabase (recommended for Vercel)
+# SUPABASE_URL=https://your-project.supabase.co
+# SUPABASE_SERVICE_ROLE_KEY=<SUPABASE_SERVICE_ROLE_KEY>
+# SUPABASE_TOKENS_TABLE=whoop_tokens
+# SUPABASE_TOKENS_PREFIX=prod
 ```
+
+### Persisting tokens with Supabase
+
+Vercel’s serverless filesystem is ephemeral, so refresh tokens disappear between deployments when you rely on `TOKEN_STORE_PATH`.
+If you provide both `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, the server stores tokens in Supabase instead of on disk. Create a
+simple table (SQL below) in your Supabase project and ensure row-level security is disabled or the service role key has insert/update/delete access:
+
+```sql
+create table if not exists whoop_tokens (
+  key text primary key,
+  token jsonb not null,
+  updated_at timestamptz not null default now()
+);
+```
+
+You can optionally override the table name via `SUPABASE_TOKENS_TABLE` and namespace keys per environment using `SUPABASE_TOKENS_PREFIX`.
+After setting the environment variables, redeploy and complete the OAuth flow once to seed the refresh token; subsequent refreshes will persist automatically.
 
 ## Running locally
 
