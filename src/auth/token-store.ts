@@ -112,7 +112,7 @@ class SupabaseTokenStore implements TokenStoreAdapter {
   async get(key = 'default'): Promise<TokenSet | null> {
     const mappedKey = this.mapKey(key);
     const { data, error } = await this.client
-      .from<SupabaseTokenRow>(this.table)
+      .from(this.table)
       .select('token')
       .eq('key', mappedKey)
       .maybeSingle();
