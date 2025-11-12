@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export interface TokenSet {
   accessToken: string;
@@ -15,7 +16,13 @@ interface TokenFileContents {
   [key: string]: TokenSet | undefined;
 }
 
-export class TokenStore {
+interface TokenStoreAdapter {
+  get(key?: string): Promise<TokenSet | null>;
+  set(tokenSet: TokenSet, key?: string): Promise<void>;
+  clear(key?: string): Promise<void>;
+}
+
+class FileTokenStore implements TokenStoreAdapter {
   private absolutePath: string;
 
   constructor(filePath: string) {
@@ -73,5 +80,99 @@ export class TokenStore {
     const contents = await this.readFile();
     delete contents[key];
     await this.writeFile(contents);
+  }
+}
+
+type SupabaseClientFactory = () => SupabaseClient;
+
+interface SupabaseTokenRow {
+  key: string;
+  token: TokenSet;
+  updated_at?: string;
+}
+
+class SupabaseTokenStore implements TokenStoreAdapter {
+  private readonly client: SupabaseClient;
+  private readonly table: string;
+  private readonly keyPrefix: string | undefined;
+
+  constructor(factory: SupabaseClientFactory, table: string, keyPrefix?: string) {
+    this.client = factory();
+    this.table = table;
+    this.keyPrefix = keyPrefix?.trim() ? keyPrefix : undefined;
+  }
+
+  private mapKey(key: string): string {
+    if (!this.keyPrefix) {
+      return key;
+    }
+    return `${this.keyPrefix}:${key}`;
+  }
+
+  async get(key = 'default'): Promise<TokenSet | null> {
+    const mappedKey = this.mapKey(key);
+    const { data, error } = await this.client
+      .from(this.table)
+      .select('token')
+      .eq('key', mappedKey)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to read token from Supabase: ${error.message}`);
+    }
+
+    return data?.token ?? null;
+  }
+
+  async set(tokenSet: TokenSet, key = 'default'): Promise<void> {
+    const mappedKey = this.mapKey(key);
+    const { error } = await this.client
+      .from(this.table)
+      .upsert({ key: mappedKey, token: tokenSet } satisfies SupabaseTokenRow, { onConflict: 'key' });
+
+    if (error) {
+      throw new Error(`Failed to store token in Supabase: ${error.message}`);
+    }
+  }
+
+  async clear(key = 'default'): Promise<void> {
+    const mappedKey = this.mapKey(key);
+    const { error } = await this.client.from(this.table).delete().eq('key', mappedKey);
+    if (error) {
+      throw new Error(`Failed to delete token from Supabase: ${error.message}`);
+    }
+  }
+}
+
+export class TokenStore implements TokenStoreAdapter {
+  private readonly backend: TokenStoreAdapter;
+
+  constructor(filePath: string) {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const tokensTable = process.env.SUPABASE_TOKENS_TABLE ?? 'whoop_tokens';
+    const keyPrefix = process.env.SUPABASE_TOKENS_PREFIX;
+
+    if (supabaseUrl && serviceRoleKey) {
+      const factory: SupabaseClientFactory = () =>
+        createClient(supabaseUrl, serviceRoleKey, {
+          auth: { persistSession: false },
+        });
+      this.backend = new SupabaseTokenStore(factory, tokensTable, keyPrefix);
+    } else {
+      this.backend = new FileTokenStore(filePath);
+    }
+  }
+
+  get(key = 'default'): Promise<TokenSet | null> {
+    return this.backend.get(key);
+  }
+
+  set(tokenSet: TokenSet, key = 'default'): Promise<void> {
+    return this.backend.set(tokenSet, key);
+  }
+
+  clear(key = 'default'): Promise<void> {
+    return this.backend.clear(key);
   }
 }
