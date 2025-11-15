@@ -62,7 +62,7 @@ export class WhoopOAuthClient {
     return tokenSet;
   }
 
-  async refreshToken(key = 'default'): Promise<TokenSet> {
+  async refreshToken(key = 'default', redirect = redirectUri): Promise<TokenSet> {
     const existing = await this.tokenStore.get(key);
     if (!existing) {
       throw new Error('No stored WHOOP refresh token');
@@ -73,6 +73,7 @@ export class WhoopOAuthClient {
       refresh_token: existing.refreshToken,
       client_id: config.whoop.clientId,
       client_secret: config.whoop.clientSecret,
+      redirect_uri: redirect,
     });
 
     const response = await axios.post<OAuthTokenResponse>(this.tokenUrl, body, {
