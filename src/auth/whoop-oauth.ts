@@ -24,7 +24,7 @@ export class WhoopOAuthClient {
   private readonly authorizeUrl = 'https://api.prod.whoop.com/oauth/oauth2/auth';
   private readonly tokenUrl = 'https://api.prod.whoop.com/oauth/oauth2/token';
 
-  constructor(private readonly tokenStore: TokenStore) {}
+  constructor(private readonly tokenStore: TokenStore) { }
 
   buildAuthorizationUrl(params: AuthorizationUrlParams = {}): { url: string; state: string } {
     const state = params.state ?? crypto.randomUUID();
@@ -73,7 +73,8 @@ export class WhoopOAuthClient {
       refresh_token: existing.refreshToken,
       client_id: config.whoop.clientId,
       client_secret: config.whoop.clientSecret,
-      redirect_uri: redirect,
+      redirect_uri: redirectUri,
+      scope: existing.scope,
     });
 
     const response = await axios.post<OAuthTokenResponse>(this.tokenUrl, body, {
