@@ -26,6 +26,28 @@ export class WhoopOAuthClient {
 
   constructor(private readonly tokenStore: TokenStore) { }
 
+  private maybeLogOAuthResponse(stage: 'exchange' | 'refresh', data: OAuthTokenResponse): void {
+    if (!config.whoop.logOAuthResponses) {
+      return;
+    }
+
+    const redact = (token?: string) => {
+      if (!token) return token;
+      if (token.length <= 8) return '*'.repeat(Math.max(token.length, 4));
+      return `${token.slice(0, 4)}…${token.slice(-4)}`;
+    };
+
+    // Avoid leaking secrets in logs while still showing whether tokens are present.
+    console.info('[WHOOP OAuth]', {
+      stage,
+      accessToken: redact(data.access_token),
+      refreshToken: redact(data.refresh_token),
+      expiresIn: data.expires_in,
+      scope: data.scope,
+      tokenType: data.token_type,
+    });
+  }
+
   buildAuthorizationUrl(params: AuthorizationUrlParams = {}): { url: string; state: string } {
     const state = params.state ?? crypto.randomUUID();
     const scopes = params.scopes ?? config.whoop.defaultScopes;
@@ -57,6 +79,7 @@ export class WhoopOAuthClient {
       },
     });
 
+    this.maybeLogOAuthResponse('exchange', response.data);
     const tokenSet = this.normalizeTokenResponse(response.data);
     await this.tokenStore.set(tokenSet, key);
     return tokenSet;
@@ -83,6 +106,7 @@ export class WhoopOAuthClient {
       },
     });
 
+    this.maybeLogOAuthResponse('refresh', response.data);
     const tokenSet = this.normalizeTokenResponse(response.data, existing);
     await this.tokenStore.set(tokenSet, key);
     return tokenSet;
