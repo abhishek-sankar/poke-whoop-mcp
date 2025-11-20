@@ -27,6 +27,7 @@ export const config = {
         'read:profile',
       ],
     tokenStorePath: process.env.TOKEN_STORE_PATH ?? (process.env.VERCEL ? '/tmp/whoop-tokens.json' : './data/whoop-tokens.json'),
+    logOAuthResponses: process.env.WHOOP_LOG_OAUTH_RESPONSES === 'true',
   },
 };
 
