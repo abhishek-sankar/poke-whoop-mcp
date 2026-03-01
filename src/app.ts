@@ -81,48 +81,49 @@ const createMcpServer = (): McpServer => {
     version: '1.0.0',
   });
 
-  server.tool(
+  const whoopSleepRecent = async (params: ListSleepInput) => {
+    const { key = 'default', ...query } = params;
+    try {
+      const response = await whoopClient.listSleep(query, key);
+      const summaryLines = response.records.map((sleep) => {
+        const start = new Date(sleep.start).toISOString();
+        const end = new Date(sleep.end).toISOString();
+        const score = sleep.score?.sleep_performance_percentage;
+        const durationHours = ((new Date(sleep.end).getTime() - new Date(sleep.start).getTime()) / 3_600_000).toFixed(2);
+        return `• Sleep ${sleep.id} | ${start} → ${end} | duration ${durationHours}h | score ${score ?? 'n/a'}%`;
+      });
+
+      const text = [
+        `Fetched ${response.records.length} sleep session(s).`,
+        ...summaryLines,
+        response.next_token ? `Next token: ${response.next_token}` : undefined,
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      return {
+        content: [
+          { type: 'text', text: `${text}\n\nRaw payload:\n${JSON.stringify(response, null, 2)}` },
+        ],
+        structuredContent: response as unknown as Record<string, unknown>,
+      };
+    } catch (error) {
+      const { message } = parseHttpError(error);
+      throw new Error(`Failed to fetch sleep data: ${message}`);
+    }
+  };
+
+  server.registerTool(
     'whoop_sleep_recent',
-    'Fetch recent sleep sessions with WHOOP metrics.',
-    listSleepInputSchema as any,
-    async (params: ListSleepInput, _extra) => {
-      const { key = 'default', ...query } = params;
-      try {
-        const response = await whoopClient.listSleep(query, key);
-        const summaryLines = response.records.map((sleep) => {
-          const start = new Date(sleep.start).toISOString();
-          const end = new Date(sleep.end).toISOString();
-          const score = sleep.score?.sleep_performance_percentage;
-          const durationHours = ((new Date(sleep.end).getTime() - new Date(sleep.start).getTime()) / 3_600_000).toFixed(2);
-          return `• Sleep ${sleep.id} | ${start} → ${end} | duration ${durationHours}h | score ${score ?? 'n/a'}%`;
-        });
-
-        const text = [
-          `Fetched ${response.records.length} sleep session(s).`,
-          ...summaryLines,
-          response.next_token ? `Next token: ${response.next_token}` : undefined,
-        ]
-          .filter(Boolean)
-          .join('\n');
-
-        return {
-          content: [
-            { type: 'text', text: `${text}\n\nRaw payload:\n${JSON.stringify(response, null, 2)}` },
-          ],
-          structuredContent: response as unknown as Record<string, unknown>,
-        };
-      } catch (error) {
-        const { message } = parseHttpError(error);
-        throw new Error(`Failed to fetch sleep data: ${message}`);
-      }
-    },
+    {
+      title: 'WHOOP Recent Sleep',
+      description: 'Fetch recent sleep sessions with WHOOP metrics.',
+      inputSchema: listSleepInputSchema,
+    } as any,
+    (async (params: ListSleepInput, _extra: unknown) => whoopSleepRecent(params)) as any,
   );
 
-  server.tool(
-    'whoop_cycle_strain',
-    'Fetch recent WHOOP cycles including strain (stress) metrics.',
-    listCyclesInputSchema as any,
-    async (params: ListCyclesInput, _extra) => {
+  const whoopCycleStrain = async (params: ListCyclesInput) => {
       const { key = 'default', ...query } = params;
       try {
         const response = await whoopClient.listCycles(query, key);
@@ -152,7 +153,16 @@ const createMcpServer = (): McpServer => {
         const { message } = parseHttpError(error);
         throw new Error(`Failed to fetch cycle data: ${message}`);
       }
-    },
+  };
+
+  server.registerTool(
+    'whoop_cycle_strain',
+    {
+      title: 'WHOOP Cycle Strain',
+      description: 'Fetch recent WHOOP cycles including strain (stress) metrics.',
+      inputSchema: listCyclesInputSchema,
+    } as any,
+    (async (params: ListCyclesInput, _extra: unknown) => whoopCycleStrain(params)) as any,
   );
 
   return server;
