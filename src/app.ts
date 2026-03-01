@@ -63,6 +63,7 @@ const listSleepInputSchema = {
   key: z.string().optional(),
 } satisfies Record<string, z.ZodTypeAny>;
 const listSleepInput = z.object(listSleepInputSchema);
+type ListSleepInput = z.infer<typeof listSleepInput>;
 
 const listCyclesInputSchema = {
   limit: z.number().int().min(1).max(25).optional(),
@@ -72,6 +73,7 @@ const listCyclesInputSchema = {
   key: z.string().optional(),
 } satisfies Record<string, z.ZodTypeAny>;
 const listCyclesInput = z.object(listCyclesInputSchema);
+type ListCyclesInput = z.infer<typeof listCyclesInput>;
 
 const createMcpServer = (): McpServer => {
   const server = new McpServer({
@@ -82,8 +84,9 @@ const createMcpServer = (): McpServer => {
   server.tool(
     'whoop_sleep_recent',
     'Fetch recent sleep sessions with WHOOP metrics.',
-    listSleepInputSchema,
-    async ({ key = 'default', ...query }) => {
+    listSleepInputSchema as any,
+    async (params: ListSleepInput, _extra) => {
+      const { key = 'default', ...query } = params;
       try {
         const response = await whoopClient.listSleep(query, key);
         const summaryLines = response.records.map((sleep) => {
@@ -118,8 +121,9 @@ const createMcpServer = (): McpServer => {
   server.tool(
     'whoop_cycle_strain',
     'Fetch recent WHOOP cycles including strain (stress) metrics.',
-    listCyclesInputSchema,
-    async ({ key = 'default', ...query }) => {
+    listCyclesInputSchema as any,
+    async (params: ListCyclesInput, _extra) => {
+      const { key = 'default', ...query } = params;
       try {
         const response = await whoopClient.listCycles(query, key);
         const summaryLines = response.records.map((cycle) => {
