@@ -3,7 +3,7 @@ cloudflared --config ~/.cloudflared/config.yml tunnel run whoop-mcp
 
 # WHOOP MCP Server for Poke
 
-This project exposes WHOOP sleep and cycle strain data over the Model Context Protocol (MCP) so that Poke can connect via the legacy HTTP+SSE transport.
+This project exposes WHOOP sleep and cycle strain data over the Model Context Protocol (MCP) so that Poke can connect via the legacy HTTP+SSE transport, while newer clients can use streamable HTTP.
 
 ## Prerequisites
 
@@ -66,7 +66,9 @@ Open `http://localhost:3000/oauth/whoop/login` in a browser to start the WHOOP O
 
 The server exposes:
 
-- `POST /sse` and `GET /sse` — MCP transport endpoints used by Poke.
+- `GET /sse` and `POST /messages?sessionId=...` — legacy HTTP+SSE MCP endpoints used by older Poke integrations.
+- `GET/POST/DELETE /mcp` — streamable HTTP MCP endpoint for newer MCP clients.
+- `POST /sse` and `GET /sse` with `Mcp-Session-Id` — compatibility path for existing streamable HTTP clients already pointed at `/sse`.
 - `GET /oauth/whoop/login` — starts OAuth flow (supports `?key=` and `?next=`).
 - `GET /oauth/whoop/callback` — OAuth redirect handler (automatic).
 - `GET /healthz` — basic readiness check.
@@ -101,4 +103,5 @@ Both tools return structured content matching the WHOOP pagination payload, plus
 - The server stores one token set per `key` (default is `default`). Add `?key=user123` to `/oauth/whoop/login` to authorize additional accounts.
 - No explicit “steps” metric exists in WHOOP v2; cycle strain is exposed as the stress proxy.
 - Tokens are automatically refreshed when requests detect expiration (60-second safety buffer).
-- The legacy HTTP+SSE transport is maintained via `StreamableHTTPServerTransport`, compatible with Poke’s current expectations.
+- OAuth `state` is signed and stateless, so the callback no longer depends on in-memory state surviving across a restart or serverless invocation.
+- File-backed token writes are atomic to avoid leaving behind zero-byte token files after interrupted writes.

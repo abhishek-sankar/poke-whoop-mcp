@@ -73,7 +73,7 @@ export class WhoopOAuthClient {
       refresh_token: existing.refreshToken,
       client_id: config.whoop.clientId,
       client_secret: config.whoop.clientSecret,
-      redirect_uri: redirectUri,
+      redirect_uri: redirect,
       scope: existing.scope,
     });
 

@@ -33,7 +33,19 @@ export class WhoopApiClient {
   }
 
   private async request<T>(config: AxiosRequestConfig, key = 'default'): Promise<T> {
-    const accessToken = await this.getAccessToken(key);
+    try {
+      return await this.requestWithToken<T>(config, await this.getAccessToken(key));
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        const refreshed = await this.oauthClient.refreshToken(key);
+        return this.requestWithToken<T>(config, refreshed.accessToken);
+      }
+
+      throw error;
+    }
+  }
+
+  private async requestWithToken<T>(config: AxiosRequestConfig, accessToken: string): Promise<T> {
     const response = await this.http.request<T>({
       ...config,
       headers: {

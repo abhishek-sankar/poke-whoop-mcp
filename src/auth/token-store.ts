@@ -51,6 +51,9 @@ class FileTokenStore implements TokenStoreAdapter {
   private async readFile(): Promise<TokenFileContents> {
     try {
       const raw = await fs.readFile(this.absolutePath, 'utf-8');
+      if (!raw.trim()) {
+        return {};
+      }
       return JSON.parse(raw) as TokenFileContents;
     } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -62,7 +65,9 @@ class FileTokenStore implements TokenStoreAdapter {
 
   private async writeFile(contents: TokenFileContents): Promise<void> {
     await this.ensureDir();
-    await fs.writeFile(this.absolutePath, JSON.stringify(contents, null, 2), 'utf-8');
+    const tempPath = `${this.absolutePath}.${process.pid}.${Date.now()}.tmp`;
+    await fs.writeFile(tempPath, JSON.stringify(contents, null, 2), 'utf-8');
+    await fs.rename(tempPath, this.absolutePath);
   }
 
   async get(key = 'default'): Promise<TokenSet | null> {
