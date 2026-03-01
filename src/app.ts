@@ -79,17 +79,11 @@ const createMcpServer = (): McpServer => {
     version: '1.0.0',
   });
 
-  server.registerTool(
+  server.tool(
     'whoop_sleep_recent',
-    {
-      title: 'WHOOP Recent Sleep',
-      description: 'Fetch recent sleep sessions with WHOOP metrics.',
-      inputSchema: listSleepInputSchema,
-    },
-    async (input) => {
-      const params = listSleepInput.parse(input);
-      const { key = 'default', ...query } = params;
-
+    'Fetch recent sleep sessions with WHOOP metrics.',
+    listSleepInputSchema,
+    async ({ key = 'default', ...query }) => {
       try {
         const response = await whoopClient.listSleep(query, key);
         const summaryLines = response.records.map((sleep) => {
@@ -121,17 +115,11 @@ const createMcpServer = (): McpServer => {
     },
   );
 
-  server.registerTool(
+  server.tool(
     'whoop_cycle_strain',
-    {
-      title: 'WHOOP Cycle Strain',
-      description: 'Fetch recent WHOOP cycles including strain (stress) metrics.',
-      inputSchema: listCyclesInputSchema,
-    },
-    async (input) => {
-      const params = listCyclesInput.parse(input);
-      const { key = 'default', ...query } = params;
-
+    'Fetch recent WHOOP cycles including strain (stress) metrics.',
+    listCyclesInputSchema,
+    async ({ key = 'default', ...query }) => {
       try {
         const response = await whoopClient.listCycles(query, key);
         const summaryLines = response.records.map((cycle) => {
