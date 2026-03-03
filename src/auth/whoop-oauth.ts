@@ -23,6 +23,7 @@ export interface OAuthTokenResponse {
 export class WhoopOAuthClient {
   private readonly authorizeUrl = 'https://api.prod.whoop.com/oauth/oauth2/auth';
   private readonly tokenUrl = 'https://api.prod.whoop.com/oauth/oauth2/token';
+  private readonly refreshPromises = new Map<string, Promise<TokenSet>>();
 
   constructor(private readonly tokenStore: TokenStore) { }
 
@@ -63,9 +64,29 @@ export class WhoopOAuthClient {
   }
 
   async refreshToken(key = 'default', redirect = redirectUri): Promise<TokenSet> {
+    const inFlight = this.refreshPromises.get(key);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const refreshPromise = this.performRefreshToken(key, redirect);
+    this.refreshPromises.set(key, refreshPromise);
+
+    try {
+      return await refreshPromise;
+    } finally {
+      this.refreshPromises.delete(key);
+    }
+  }
+
+  private async performRefreshToken(key = 'default', _redirect = redirectUri): Promise<TokenSet> {
     const existing = await this.tokenStore.get(key);
     if (!existing) {
       throw new Error('No stored WHOOP refresh token');
+    }
+
+    if (!existing.refreshToken) {
+      throw new Error('Stored WHOOP token is missing a refresh token. Re-run /oauth/whoop/login to authorize offline access.');
     }
 
     const body = qs.stringify({
@@ -73,8 +94,7 @@ export class WhoopOAuthClient {
       refresh_token: existing.refreshToken,
       client_id: config.whoop.clientId,
       client_secret: config.whoop.clientSecret,
-      redirect_uri: redirect,
-      scope: existing.scope,
+      scope: 'offline',
     });
 
     const response = await axios.post<OAuthTokenResponse>(this.tokenUrl, body, {
@@ -89,12 +109,12 @@ export class WhoopOAuthClient {
   }
 
   private normalizeTokenResponse(data: OAuthTokenResponse, previous?: TokenSet): TokenSet {
-    const expiresAt = Date.now() + data.expires_in * 1000 - 60_000; // subtract 60s as buffer
+    const expiresAt = Date.now() + data.expires_in * 1000 - 5 * 60_000;
     return {
       accessToken: data.access_token,
       refreshToken: data.refresh_token ?? previous?.refreshToken ?? '',
       expiresAt,
-      scope: data.scope,
+      scope: data.scope ?? previous?.scope ?? '',
       tokenType: data.token_type,
     };
   }

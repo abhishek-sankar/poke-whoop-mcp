@@ -31,7 +31,7 @@ HOST=0.0.0.0
 # Optional: require an API key for MCP requests
 # MCP_API_KEY=generate-a-strong-key
 # Optional: override default scopes (comma-separated)
-# WHOOP_SCOPES=read:sleep,read:cycles,read:profile
+# WHOOP_SCOPES=offline,read:sleep,read:cycles,read:profile
 # Optional: move token storage to Supabase (recommended for Vercel)
 # SUPABASE_URL=https://your-project.supabase.co
 # SUPABASE_SERVICE_ROLE_KEY=<SUPABASE_SERVICE_ROLE_KEY>
@@ -102,6 +102,7 @@ Both tools return structured content matching the WHOOP pagination payload, plus
 
 - The server stores one token set per `key` (default is `default`). Add `?key=user123` to `/oauth/whoop/login` to authorize additional accounts.
 - No explicit “steps” metric exists in WHOOP v2; cycle strain is exposed as the stress proxy.
-- Tokens are automatically refreshed when requests detect expiration (60-second safety buffer).
+- WHOOP refresh requires the `offline` scope. The server now ensures `offline` is requested by default, but if your existing token was authorized before that change you need to re-run `/oauth/whoop/login` once.
+- Tokens are automatically refreshed when requests detect expiration, with a 5-minute safety buffer and a single in-flight refresh per account to avoid concurrent refresh races.
 - OAuth `state` is signed and stateless, so the callback no longer depends on in-memory state surviving across a restart or serverless invocation.
 - File-backed token writes are atomic to avoid leaving behind zero-byte token files after interrupted writes.

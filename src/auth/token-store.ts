@@ -96,14 +96,48 @@ interface SupabaseTokenRow {
   updated_at?: string;
 }
 
+const describeSupabaseError = (error: unknown, action: string, url?: string): never => {
+  if (error instanceof Error) {
+    const cause = error.cause as NodeJS.ErrnoException | undefined;
+    const details = [
+      error.message,
+      cause?.code,
+      cause?.message && cause.message !== error.message ? cause.message : undefined,
+      url ? `url=${url}` : undefined,
+    ].filter(Boolean).join(' | ');
+    throw new Error(`Failed to ${action} in Supabase: ${details}`);
+  }
+
+  throw new Error(`Failed to ${action} in Supabase: ${String(error)}`);
+};
+
+const validateSupabaseConfig = (supabaseUrl: string, serviceRoleKey: string): void => {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(supabaseUrl);
+  } catch (error) {
+    throw new Error(`SUPABASE_URL is invalid: ${(error as Error).message}`);
+  }
+
+  if (parsedUrl.protocol !== 'https:') {
+    throw new Error('SUPABASE_URL must use https.');
+  }
+
+  if (serviceRoleKey.startsWith('sb_publishable_')) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is using a publishable key. Use the service role or secret server key instead.');
+  }
+};
+
 class SupabaseTokenStore implements TokenStoreAdapter {
   private readonly client: SupabaseClient;
   private readonly table: string;
   private readonly keyPrefix: string | undefined;
+  private readonly url: string;
 
-  constructor(factory: SupabaseClientFactory, table: string, keyPrefix?: string) {
+  constructor(factory: SupabaseClientFactory, table: string, url: string, keyPrefix?: string) {
     this.client = factory();
     this.table = table;
+    this.url = url;
     this.keyPrefix = keyPrefix?.trim() ? keyPrefix : undefined;
   }
 
@@ -116,11 +150,17 @@ class SupabaseTokenStore implements TokenStoreAdapter {
 
   async get(key = 'default'): Promise<TokenSet | null> {
     const mappedKey = this.mapKey(key);
-    const { data, error } = await this.client
-      .from(this.table)
-      .select('token')
-      .eq('key', mappedKey)
-      .maybeSingle();
+    let data;
+    let error;
+    try {
+      ({ data, error } = await this.client
+        .from(this.table)
+        .select('token')
+        .eq('key', mappedKey)
+        .maybeSingle());
+    } catch (caught) {
+      describeSupabaseError(caught, 'read token', this.url);
+    }
 
     if (error) {
       throw new Error(`Failed to read token from Supabase: ${error.message}`);
@@ -131,9 +171,14 @@ class SupabaseTokenStore implements TokenStoreAdapter {
 
   async set(tokenSet: TokenSet, key = 'default'): Promise<void> {
     const mappedKey = this.mapKey(key);
-    const { error } = await this.client
-      .from(this.table)
-      .upsert({ key: mappedKey, token: tokenSet } satisfies SupabaseTokenRow, { onConflict: 'key' });
+    let error;
+    try {
+      ({ error } = await this.client
+        .from(this.table)
+        .upsert({ key: mappedKey, token: tokenSet } satisfies SupabaseTokenRow, { onConflict: 'key' }));
+    } catch (caught) {
+      describeSupabaseError(caught, 'store token', this.url);
+    }
 
     if (error) {
       throw new Error(`Failed to store token in Supabase: ${error.message}`);
@@ -142,7 +187,12 @@ class SupabaseTokenStore implements TokenStoreAdapter {
 
   async clear(key = 'default'): Promise<void> {
     const mappedKey = this.mapKey(key);
-    const { error } = await this.client.from(this.table).delete().eq('key', mappedKey);
+    let error;
+    try {
+      ({ error } = await this.client.from(this.table).delete().eq('key', mappedKey));
+    } catch (caught) {
+      describeSupabaseError(caught, 'delete token', this.url);
+    }
     if (error) {
       throw new Error(`Failed to delete token from Supabase: ${error.message}`);
     }
@@ -153,17 +203,18 @@ export class TokenStore implements TokenStoreAdapter {
   private readonly backend: TokenStoreAdapter;
 
   constructor(filePath: string) {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseUrl = process.env.SUPABASE_URL?.trim();
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
     const tokensTable = process.env.SUPABASE_TOKENS_TABLE ?? 'whoop_tokens';
     const keyPrefix = process.env.SUPABASE_TOKENS_PREFIX;
 
     if (supabaseUrl && serviceRoleKey) {
+      validateSupabaseConfig(supabaseUrl, serviceRoleKey);
       const factory: SupabaseClientFactory = () =>
         createClient(supabaseUrl, serviceRoleKey, {
           auth: { persistSession: false },
         });
-      this.backend = new SupabaseTokenStore(factory, tokensTable, keyPrefix);
+      this.backend = new SupabaseTokenStore(factory, tokensTable, supabaseUrl, keyPrefix);
     } else {
       this.backend = new FileTokenStore(filePath);
     }
