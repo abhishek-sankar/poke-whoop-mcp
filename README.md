@@ -3,7 +3,7 @@ cloudflared --config ~/.cloudflared/config.yml tunnel run whoop-mcp
 
 # WHOOP MCP Server for Poke
 
-This project exposes WHOOP sleep and cycle strain data over the Model Context Protocol (MCP) so that Poke can connect via the legacy HTTP+SSE transport.
+This project exposes WHOOP sleep and cycle strain data over the Model Context Protocol (MCP) so that Poke can connect over streamable HTTP, with legacy HTTP+SSE still available for older clients.
 
 ## Prerequisites
 
@@ -31,7 +31,7 @@ HOST=0.0.0.0
 # Optional: require an API key for MCP requests
 # MCP_API_KEY=generate-a-strong-key
 # Optional: override default scopes (comma-separated)
-# WHOOP_SCOPES=read:sleep,read:cycles,read:profile
+# WHOOP_SCOPES=offline,read:sleep,read:cycles,read:profile
 # Optional: move token storage to Supabase (recommended for Vercel)
 # SUPABASE_URL=https://your-project.supabase.co
 # SUPABASE_SERVICE_ROLE_KEY=<SUPABASE_SERVICE_ROLE_KEY>
@@ -66,7 +66,10 @@ Open `http://localhost:3000/oauth/whoop/login` in a browser to start the WHOOP O
 
 The server exposes:
 
-- `POST /sse` and `GET /sse` — MCP transport endpoints used by Poke.
+- `POST /mcp` — stateless streamable HTTP MCP endpoint. This is the recommended endpoint for Poke and for Vercel deployments.
+- `GET/DELETE /mcp` — returns `405` because the server is intentionally stateless.
+- `GET /sse` and `POST /messages?sessionId=...` — legacy HTTP+SSE MCP endpoints for older clients. These rely on in-memory session state and are a poor fit for serverless deployments.
+- `POST /sse` — compatibility path for existing streamable HTTP clients already pointed at `/sse`.
 - `GET /oauth/whoop/login` — starts OAuth flow (supports `?key=` and `?next=`).
 - `GET /oauth/whoop/callback` — OAuth redirect handler (automatic).
 - `GET /healthz` — basic readiness check.
@@ -82,7 +85,7 @@ If you set `MCP_API_KEY`, send the same value in the `Authorization: Bearer <key
 In Poke’s “New Integration” form:
 
 - **Name**: WHOOP (or anything meaningful)
-- **Server URL**: `https://whoop.abhisheksankar.com/sse`
+- **Server URL**: `https://whoop.abhisheksankar.com/mcp`
 - **API Key**: enter the value from `MCP_API_KEY` (leave blank only if you didn’t set one)
 
 ## Available tools
@@ -100,5 +103,8 @@ Both tools return structured content matching the WHOOP pagination payload, plus
 
 - The server stores one token set per `key` (default is `default`). Add `?key=user123` to `/oauth/whoop/login` to authorize additional accounts.
 - No explicit “steps” metric exists in WHOOP v2; cycle strain is exposed as the stress proxy.
-- Tokens are automatically refreshed when requests detect expiration (60-second safety buffer).
-- The legacy HTTP+SSE transport is maintained via `StreamableHTTPServerTransport`, compatible with Poke’s current expectations.
+- WHOOP refresh requires the `offline` scope. The server now ensures `offline` is requested by default, but if your existing token was authorized before that change you need to re-run `/oauth/whoop/login` once.
+- Tokens are automatically refreshed when requests detect expiration, with a 5-minute safety buffer and a single in-flight refresh per account to avoid concurrent refresh races.
+- OAuth `state` is signed and stateless, so the callback no longer depends on in-memory state surviving across a restart or serverless invocation.
+- File-backed token writes are atomic to avoid leaving behind zero-byte token files after interrupted writes.
+- Vercel is fine for the OAuth callback and stateless `POST /mcp` transport. It is a poor fit for stateful SSE/session transports because those rely on in-memory process state.

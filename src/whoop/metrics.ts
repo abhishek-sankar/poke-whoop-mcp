@@ -7,7 +7,7 @@ export interface TodayMetrics {
   light_sleep_hours: number | null;
   deep_sleep_hours: number | null;
   rem_sleep_hours: number | null;
-  steps: number | null;
+
   strain: number | null;
   calories: number | null;
   cycle_id: number | null;
@@ -110,7 +110,7 @@ export async function getTodayMetrics(whoopClient: WhoopApiClient, key = 'defaul
     light_sleep_hours: hoursFromMilliseconds(stageSummary?.total_light_sleep_time_milli),
     deep_sleep_hours: hoursFromMilliseconds(stageSummary?.total_slow_wave_sleep_time_milli),
     rem_sleep_hours: hoursFromMilliseconds(stageSummary?.total_rem_sleep_time_milli),
-    steps: null,
+
     strain: cycleScore?.strain ?? null,
     calories,
     cycle_id: cycleRecord?.id ?? null,

@@ -2,6 +2,20 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const normalizeWhoopScopes = (value: string | undefined): string[] => {
+  const configured = value?.split(',').map((scope) => scope.trim()).filter(Boolean) ?? [
+    'offline',
+    'read:sleep',
+    'read:cycles',
+    'read:profile',
+  ];
+
+  return Array.from(new Set([
+    'offline',
+    ...configured,
+  ]));
+};
+
 const required = (value: string | undefined, name: string): string => {
   if (!value) {
     throw new Error(`Missing required environment variable ${name}`);
@@ -20,12 +34,7 @@ export const config = {
     clientId: required(process.env.WHOOP_CLIENT_ID, 'WHOOP_CLIENT_ID'),
     clientSecret: required(process.env.WHOOP_CLIENT_SECRET, 'WHOOP_CLIENT_SECRET'),
     redirectPath: process.env.WHOOP_REDIRECT_PATH ?? '/oauth/whoop/callback',
-    defaultScopes:
-      process.env.WHOOP_SCOPES?.split(',').map((scope) => scope.trim()).filter(Boolean) ?? [
-        'read:sleep',
-        'read:cycles',
-        'read:profile',
-      ],
+    defaultScopes: normalizeWhoopScopes(process.env.WHOOP_SCOPES),
     tokenStorePath: process.env.TOKEN_STORE_PATH ?? (process.env.VERCEL ? '/tmp/whoop-tokens.json' : './data/whoop-tokens.json'),
   },
 };
